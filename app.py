@@ -103,11 +103,35 @@ else:
             f"${ahorro_total:,.0f}", 
             delta="Retenido", 
             delta_color="normal",
-            help="Dinero ahorrado al detectar que la carga real era MENOR a la declarada."
+            help="Dinero ahorrado al detectar carga MENOR a la declarada."
         )
         k6.metric(
             "💸 Fuga (Merma)", 
             f"${fuga_total:,.0f}", 
             delta="-Desviación", 
             delta_color="inverse",
-            help="Valor del material excedente que pasó sin
+            help="Valor del material excedente no declarado (Merma)."
+        )
+
+        # --- GRÁFICOS ---
+        c1, c2 = st.columns(2)
+        with c1:
+            # Evolución Volumen
+            daily = df_filtered.groupby('Fecha Ingreso')['Vol. IA (m³)'].sum().reset_index()
+            fig1 = px.bar(daily, x='Fecha Ingreso', y='Vol. IA (m³)', title="📈 Flujo Diario de Material (m³)")
+            st.plotly_chart(fig1, use_container_width=True)
+            
+        with c2:
+            # Gráfico de Dispersión Financiera (Quién nos ahorra vs quién nos cuesta)
+            # Eje X = Ahorro, Eje Y = Fuga
+            roi_empresa = df_filtered.groupby('Empresa')[['Ahorro_CLP', 'Fuga_CLP']].sum().reset_index()
+            fig2 = px.scatter(roi_empresa, x='Ahorro_CLP', y='Fuga_CLP', color='Empresa', size='Ahorro_CLP',
+                              title="🏢 Análisis Financiero (Ahorro vs Fuga)",
+                              labels={'Ahorro_CLP': 'Ahorro Generado ($)', 'Fuga_CLP': 'Fuga Detectada ($)'})
+            st.plotly_chart(fig2, use_container_width=True)
+
+        # --- DETALLE TABULAR ---
+        with st.expander("📝 Ver Detalle de Registros (Auditoría Financiera)"):
+            cols = ['Fecha Ingreso', 'Patente', 'Empresa', 'Material (IA Class)', 
+                    'Vol. Declarado (m³)', 'Vol. IA (m³)', 'Ahorro_CLP', 'Fuga_CLP']
+            st.dataframe(df_filtered[cols].sort_values('Fecha Ingreso', ascending=False), use_container_width=True)
