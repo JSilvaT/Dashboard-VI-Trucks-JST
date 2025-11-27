@@ -127,7 +127,20 @@ else:
 
         # --- DETALLE DE DATA (TABLA INTERACTIVA) ---
         with st.expander("📝 Ver Detalle de Registros (Click para desplegar)"):
+            # AQUI AGREGAMOS 'Vol. Declarado (m³)' A LA LISTA DE COLUMNAS
+            cols_to_show = [
+                'Fecha Ingreso', 
+                'Hora Ingreso', 
+                'Patente', 
+                'Empresa', 
+                'Material (IA Class)', 
+                'Vol. Declarado (m³)',  # <--- ¡Nueva columna recuperada!
+                'Vol. IA (m³)', 
+                'Precisión (%)', 
+                'Contaminación (%)'
+            ]
+            
             st.dataframe(
-                df_filtered[['Fecha Ingreso', 'Hora Ingreso', 'Patente', 'Empresa', 'Material (IA Class)', 'Vol. IA (m³)', 'Precisión (%)', 'Contaminación (%)']].sort_values(by='Fecha Ingreso', ascending=False),
+                df_filtered[cols_to_show].sort_values(by='Fecha Ingreso', ascending=False),
                 use_container_width=True
             )
