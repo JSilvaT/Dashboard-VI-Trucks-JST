@@ -24,7 +24,7 @@ st.markdown("""
 
 # --- ENCABEZADO ---
 st.title("🧠 VI Trucks JST: Plataforma de Inteligencia Artificial")
-st.markdown("**Cliente:** CPG Chile | **Módulo:** Analytics Avanzado (Clustering & Predicción) | **Versión:** 3.0")
+st.markdown("**Cliente:** CPG Chile | **Módulo:** Analytics Avanzado (Clustering & Predicción) | **Versión:** 3.1 (Proyección Mensual)")
 
 # --- 1. MÓDULO DE INGESTA Y ETL (EXTRACT, TRANSFORM, LOAD) ---
 @st.cache_data
@@ -36,7 +36,7 @@ def cargar_y_limpiar_datos():
         # TRANSFORM: Limpieza y Casteo de Tipos
         # Convertir fechas a objetos datetime reales
         df['Fecha Ingreso'] = pd.to_datetime(df['Fecha Ingreso'])
-        # Imputación de nulos (si existieran) con 0 o la media, para evitar errores en ML
+        # Imputación de nulos (si existieran) con 0 o la media
         df.fillna(0, inplace=True)
         
         return df
@@ -73,13 +73,13 @@ else:
         )
         df_filtered = df[mask].copy()
     else:
-        df_filtered = df.copy() # Fallback por seguridad
+        df_filtered = df.copy()
 
-    # --- PESTAÑAS DE NAVEGACIÓN (LA ESTRUCTURA DE LA APP) ---
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard Operativo", "🧹 Calidad de Datos (ETL)", "🤖 Clustering (IA)", "🔮 Predicciones Futuras"])
+    # --- PESTAÑAS DE NAVEGACIÓN ---
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard Operativo", "🧹 Calidad de Datos (ETL)", "🤖 Clustering (IA)", "🔮 Predicciones (30 Días)"])
 
     # ==========================================
-    # TAB 1: DASHBOARD OPERATIVO (Resumen Ejecutivo)
+    # TAB 1: DASHBOARD OPERATIVO
     # ==========================================
     with tab1:
         st.subheader("Estado Actual de la Operación (KPIs)")
@@ -128,43 +128,38 @@ else:
     # ==========================================
     with tab2:
         st.subheader("🧹 Auditoría de Calidad de Datos (Data Health)")
-        st.info("Este módulo garantiza la transparencia del proceso. Validamos que los datos no tengan errores antes de aplicar IA.")
+        st.info("Validación técnica de integridad de los datos antes del procesamiento IA.")
         
         col_a, col_b = st.columns(2)
         with col_a:
             st.markdown("#### 1. Integridad de Datos (Nulos)")
             nulos = df_filtered.isnull().sum()
             if nulos.sum() == 0:
-                st.success("✅ INTEGRIDAD OK: No se detectaron valores nulos en el dataset.")
+                st.success("✅ INTEGRIDAD OK: No se detectaron valores nulos.")
                 st.dataframe(nulos, width=400)
             else:
                 st.error(f"⚠️ ALERTA: Se detectaron {nulos.sum()} valores perdidos.")
                 st.dataframe(nulos[nulos > 0])
         
         with col_b:
-            st.markdown("#### 2. Estadística Descriptiva Automática")
-            st.markdown("Resumen estadístico de las variables numéricas clave:")
+            st.markdown("#### 2. Estadística Descriptiva")
             st.dataframe(df_filtered[['Vol. Declarado (m³)', 'Vol. IA (m³)', 'Precisión (%)']].describe())
 
     # ==========================================
     # TAB 3: CLUSTERING (APRENDIZAJE NO SUPERVISADO)
     # ==========================================
     with tab3:
-        st.subheader("🤖 Descubrimiento de Patrones (K-Means Clustering)")
-        st.markdown("""
-        La IA agrupa automáticamente los camiones basándose en su comportamiento, sin intervención humana.
-        - **Eje X:** Precisión (%) | **Eje Y:** Contaminación (%)
-        - **Objetivo:** Detectar si los camiones "Sucios" son los que generan baja "Precisión".
-        """)
+        st.subheader("🤖 Segmentación Inteligente de Camiones")
+        st.markdown("Algoritmo **K-Means** para agrupar camiones por comportamiento (Precisión vs Contaminación).")
 
         if len(df_filtered) > 10:
-            # Preparación de datos (Scaling)
+            # Scaling
             X = df_filtered[['Precisión (%)', 'Contaminación (%)']].copy()
             scaler = StandardScaler()
             X_scaled = scaler.fit_transform(X)
 
-            # Selector de K (Clusters)
-            k = st.slider("Número de Grupos a identificar (K)", 2, 5, 3)
+            # Selector de K
+            k = st.slider("Número de Grupos (K)", 2, 5, 3)
             
             # Modelo K-Means
             kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
@@ -176,80 +171,74 @@ else:
                 fig_k, ax_k = plt.subplots(figsize=(10, 6))
                 sns.scatterplot(data=df_filtered, x='Precisión (%)', y='Contaminación (%)', 
                                 hue='Cluster', palette='deep', s=100, style='Material (IA Class)', ax=ax_k)
-                plt.title(f"Segmentación Inteligente en {k} Clusters")
+                plt.title(f"Segmentación de la Flota en {k} Perfiles")
                 st.pyplot(fig_k)
             
             with col_k2:
-                st.markdown("#### Análisis de Grupos")
+                st.markdown("#### Perfiles Identificados")
                 for i in range(k):
                     cluster_data = df_filtered[df_filtered['Cluster'] == i]
                     p_mean = cluster_data['Precisión (%)'].mean()
                     c_mean = cluster_data['Contaminación (%)'].mean()
                     st.success(f"**Grupo {i}**\n- Precisión: {p_mean:.1f}%\n- Contam.: {c_mean:.1f}%")
         else:
-            st.warning("Se requieren al menos 10 registros filtrados para ejecutar Clustering.")
+            st.warning("Datos insuficientes para Clustering (>10 registros requeridos).")
 
     # ==========================================
-    # TAB 4: PREDICCIONES (REGRESIÓN LINEAL)
+    # TAB 4: PREDICCIONES (REGRESIÓN LINEAL - 30 DÍAS)
     # ==========================================
     with tab4:
-        st.subheader("🔮 Proyección de Volúmenes (Forecasting)")
-        st.markdown("Modelo supervisado de **Regresión Lineal** para estimar la carga de trabajo de los próximos 7 días.")
+        st.subheader("🔮 Proyección Mensual de Demanda (30 Días)")
+        st.markdown("Modelo de **Regresión Lineal** para estimar el volumen de carga del próximo mes calendario.")
 
         # Agrupar datos por día
         daily_vol = df.groupby('Fecha Ingreso')['Vol. IA (m³)'].sum().reset_index()
         
         if len(daily_vol) > 5:
-            # Ingeniería de Características (Día numérico)
+            # Ingeniería de Características
             daily_vol['Dia_Num'] = (daily_vol['Fecha Ingreso'] - daily_vol['Fecha Ingreso'].min()).dt.days
             
-            # Entrenamiento del Modelo
+            # Entrenamiento
             X_reg = daily_vol[['Dia_Num']]
             y_reg = daily_vol['Vol. IA (m³)']
             model = LinearRegression()
             model.fit(X_reg, y_reg)
             
-            # Predicción (Próximos 7 días)
+            # --- PREDICCIÓN EXTENDIDA (30 DÍAS) ---
             last_day_num = daily_vol['Dia_Num'].max()
-            future_days_num = np.array(range(last_day_num + 1, last_day_num + 8)).reshape(-1, 1)
+            # Creamos un rango de 1 a 30 días en el futuro
+            future_days_num = np.array(range(last_day_num + 1, last_day_num + 31)).reshape(-1, 1)
             future_vol = model.predict(future_days_num)
             
-            # Crear fechas futuras
+            # Fechas futuras (30 días)
             last_date = daily_vol['Fecha Ingreso'].max()
-            future_dates = [last_date + datetime.timedelta(days=i) for i in range(1, 8)]
+            future_dates = [last_date + datetime.timedelta(days=i) for i in range(1, 31)]
             
-            # DataFrame de Futuro
+            # DataFrame Futuro
             df_future = pd.DataFrame({
                 'Fecha Ingreso': future_dates,
                 'Vol. IA (m³)': future_vol,
-                'Tipo': 'Proyección (IA)'
+                'Tipo': 'Proyección (30 Días)'
             })
             daily_vol['Tipo'] = 'Histórico Real'
             
-            # Unir para graficar
+            # Unir datasets
             df_combined = pd.concat([daily_vol, df_future])
+
+            # Métricas de la Proyección
+            vol_proyectado_mes = df_future['Vol. IA (m³)'].sum()
+            tendencia_txt = "Creciente" if model.coef_[0] > 0 else "Decreciente"
+
+            col_p1, col_p2 = st.columns(2)
+            col_p1.metric("Volumen Total Estimado (30 días)", f"{vol_proyectado_mes:,.0f} m³")
+            col_p2.metric("Tendencia de Carga", tendencia_txt, f"{model.coef_[0]:.2f} m³/día")
 
             # Visualización
             fig_pred, ax_p = plt.subplots(figsize=(12, 5))
-            sns.lineplot(data=df_combined, x='Fecha Ingreso', y='Vol. IA (m³)', hue='Tipo', style='Tipo', markers=True, ax=ax_p)
             
-            # Línea de Tendencia General
-            x_trend = np.linspace(0, last_day_num + 7, 100).reshape(-1, 1)
-            y_trend = model.predict(x_trend)
-            trend_dates = [daily_vol['Fecha Ingreso'].min() + datetime.timedelta(days=int(d)) for d in x_trend.flatten()]
-            ax_p.plot(trend_dates, y_trend, color='red', linestyle='--', alpha=0.5, label='Tendencia Lineal')
-            
-            plt.title(f"Proyección de Demanda para la Semana del {future_dates[0].strftime('%d-%m')}")
-            plt.legend()
-            st.pyplot(fig_pred)
+            # Graficar Histórico vs Predicción
+            sns.lineplot(
 
-            st.caption("Nota: La proyección asume condiciones operativas similares a los últimos 60 días.")
-        else:
-            st.warning("No hay suficientes días de datos para generar una predicción fiable.")
-
-# --- PIE DE PÁGINA ---
-st.divider()
-st.caption("Sistema de Visión Artificial 'VI Trucks JST' | Desarrollado para CPG Chile | Proyecto IDA300 - UNAB")
 
 
 
