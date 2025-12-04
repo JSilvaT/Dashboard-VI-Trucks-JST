@@ -1,12 +1,11 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
+import plotly.express as px
+import plotly.graph_objects as go
 from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression
-import datetime
+from datetime import datetime, timedelta  # <--- AQUÍ ESTABA EL DETALLE
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(
@@ -288,6 +287,7 @@ else:
 # --- PIE DE PÁGINA ---
 st.divider()
 st.caption("Sistema de Visión Artificial 'VI Trucks JST' | Desarrollado para CPG Chile | Proyecto IDA300 - UNAB")
+
 
 
 
