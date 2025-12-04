@@ -1,11 +1,12 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
+import seaborn as sns
+import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression
-from datetime import datetime, timedelta  # <--- AQUÍ ESTABA EL DETALLE
+import datetime
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(
@@ -145,86 +146,48 @@ else:
             st.markdown("Resumen estadístico de las variables numéricas clave:")
             st.dataframe(df_filtered[['Vol. Declarado (m³)', 'Vol. IA (m³)', 'Precisión (%)']].describe())
 
-    # ==============================================================================
-    # TAB 3: PREDICCIONES (FORECASTING) - VISUALMENTE MEJORADO
-    # ==============================================================================
+    # ==========================================
+    # TAB 3: CLUSTERING (APRENDIZAJE NO SUPERVISADO)
+    # ==========================================
     with tab3:
-        st.subheader("🔮 Proyección de Flujo (Próximos 7 días)")
-        st.markdown("Proyección basada en tendencia lineal y media móvil de los últimos registros.")
-        
-        # 1. Preparar datos
-        daily_vol = df.groupby('Fecha Ingreso')['Vol. IA (m³)'].sum().reset_index()
-        daily_vol['Dia_Num'] = np.arange(len(daily_vol)) 
-        
-        # 2. Entrenar Modelo (Regresión Lineal Simple)
-        X = daily_vol[['Dia_Num']]
-        y = daily_vol['Vol. IA (m³)']
-        
-        if len(daily_vol) > 1:
-            model = LinearRegression()
-            model.fit(X, y)
+        st.subheader("🤖 Descubrimiento de Patrones (K-Means Clustering)")
+        st.markdown("""
+        La IA agrupa automáticamente los camiones basándose en su comportamiento, sin intervención humana.
+        - **Eje X:** Precisión (%) | **Eje Y:** Contaminación (%)
+        - **Objetivo:** Detectar si los camiones "Sucios" son los que generan baja "Precisión".
+        """)
+
+        if len(df_filtered) > 10:
+            # Preparación de datos (Scaling)
+            X = df_filtered[['Precisión (%)', 'Contaminación (%)']].copy()
+            scaler = StandardScaler()
+            X_scaled = scaler.fit_transform(X)
+
+            # Selector de K (Clusters)
+            k = st.slider("Número de Grupos a identificar (K)", 2, 5, 3)
             
-            # 3. Predecir Futuro
-            future_days = 7
-            last_day_num = daily_vol['Dia_Num'].max()
-            future_X = np.arange(last_day_num + 1, last_day_num + 1 + future_days).reshape(-1, 1)
-            future_pred = model.predict(future_X)
+            # Modelo K-Means
+            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+            df_filtered['Cluster'] = kmeans.fit_predict(X_scaled)
             
-            # Generar fechas futuras
-            last_date = daily_vol['Fecha Ingreso'].max()
-            future_dates = [last_date + timedelta(days=i) for i in range(1, future_days + 1)]
+            # Visualización
+            col_k1, col_k2 = st.columns([3, 1])
+            with col_k1:
+                fig_k, ax_k = plt.subplots(figsize=(10, 6))
+                sns.scatterplot(data=df_filtered, x='Precisión (%)', y='Contaminación (%)', 
+                                hue='Cluster', palette='deep', s=100, style='Material (IA Class)', ax=ax_k)
+                plt.title(f"Segmentación Inteligente en {k} Clusters")
+                st.pyplot(fig_k)
             
-            # --- TRUCO VISUAL: CONECTAR LAS LÍNEAS ---
-            # Agregamos el último punto real como el primer punto de la predicción
-            # para que no quede un hueco en el gráfico.
-            last_real_val = daily_vol.iloc[-1]['Vol. IA (m³)']
-            
-            # Fechas: [Última Real, Futuro 1, Futuro 2...]
-            plot_dates = [last_date] + future_dates
-            # Valores: [Último Real, Pred 1, Pred 2...]
-            plot_vals = [last_real_val] + list(future_pred.flatten())
-            
-            df_future = pd.DataFrame({
-                'Fecha Ingreso': plot_dates, 
-                'Vol. IA (m³)': plot_vals, 
-                'Tipo': 'Predicción'
-            })
-            
-            daily_vol['Tipo'] = 'Histórico'
-            
-            # Unir para graficar
-            df_forecast = pd.concat([daily_vol, df_future])
-            
-            # 4. Graficar
-            fig_forecast = px.line(df_forecast, x='Fecha Ingreso', y='Vol. IA (m³)', color='Tipo', 
-                                   markers=True, title="Pronóstico de Volumen de Carga",
-                                   color_discrete_map={"Histórico": "#1f77b4", "Predicción": "#ff7f0e"}) # Azul y Naranja
-            
-            # Línea vertical de "Hoy"
-            # Usamos el truco numérico que sí funciona
-            fecha_numerica = last_date.timestamp() * 1000
-            fig_forecast.add_vline(x=fecha_numerica, line_dash="dash", line_color="green", annotation_text="Hoy")
-            
-            st.plotly_chart(fig_forecast, use_container_width=True)
-            
-            # 5. Interpretación Inteligente
-            tendencia = model.coef_[0]
-            
-            # Lógica para que el texto tenga sentido de negocio
-            col_res1, col_res2 = st.columns(2)
-            with col_res1:
-                st.info(f"**Tasa de Variación:** {tendencia:.2f} m³/día")
-            
-            with col_res2:
-                if abs(tendencia) < 0.5:
-                    st.success("✅ **Diagnóstico:** Operación Estable. El flujo se mantiene constante sin desviaciones críticas.")
-                elif tendencia > 0:
-                    st.success("📈 **Diagnóstico:** Tendencia al Alza. Se proyecta un aumento en la carga de trabajo.")
-                else:
-                    st.warning("📉 **Diagnóstico:** Tendencia a la Baja. Posible disminución de actividad.")
-                    
+            with col_k2:
+                st.markdown("#### Análisis de Grupos")
+                for i in range(k):
+                    cluster_data = df_filtered[df_filtered['Cluster'] == i]
+                    p_mean = cluster_data['Precisión (%)'].mean()
+                    c_mean = cluster_data['Contaminación (%)'].mean()
+                    st.success(f"**Grupo {i}**\n- Precisión: {p_mean:.1f}%\n- Contam.: {c_mean:.1f}%")
         else:
-            st.warning("⚠️ No hay suficientes datos históricos para generar una predicción.")
+            st.warning("Se requieren al menos 10 registros filtrados para ejecutar Clustering.")
 
     # ==========================================
     # TAB 4: PREDICCIONES (REGRESIÓN LINEAL)
@@ -287,6 +250,7 @@ else:
 # --- PIE DE PÁGINA ---
 st.divider()
 st.caption("Sistema de Visión Artificial 'VI Trucks JST' | Desarrollado para CPG Chile | Proyecto IDA300 - UNAB")
+
 
 
 
