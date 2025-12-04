@@ -237,8 +237,28 @@ else:
             fig_pred, ax_p = plt.subplots(figsize=(12, 5))
             
             # Graficar Histórico vs Predicción
-            sns.lineplot(
+            sns.lineplot(data=df_combined, x='Fecha Ingreso', y='Vol. IA (m³)', hue='Tipo', style='Tipo', markers=True, ax=ax_p)
+            
+            # Línea de Tendencia General (Extendida hasta el final del mes)
+            x_trend = np.linspace(0, last_day_num + 30, 100).reshape(-1, 1)
+            y_trend = model.predict(x_trend)
+            trend_dates = [daily_vol['Fecha Ingreso'].min() + datetime.timedelta(days=int(d)) for d in x_trend.flatten()]
+            ax_p.plot(trend_dates, y_trend, color='red', linestyle='--', alpha=0.5, label='Tendencia Lineal')
+            
+            plt.title(f"Proyección Operativa desde {future_dates[0].strftime('%d-%m')} hasta {future_dates[-1].strftime('%d-%m')}")
+            plt.grid(True, linestyle='--', alpha=0.3)
+            plt.legend()
+            st.pyplot(fig_pred)
 
+            with st.expander("Ver Tabla Detallada de Proyección Mensual"):
+                st.dataframe(df_future[['Fecha Ingreso', 'Vol. IA (m³)']].style.format({'Vol. IA (m³)': '{:.2f}'}), use_container_width=True)
+
+        else:
+            st.warning("Se requieren más datos históricos para generar una proyección mensual fiable.")
+
+# --- PIE DE PÁGINA ---
+st.divider()
+st.caption("Sistema de Visión Artificial 'VI Trucks JST' | Desarrollado para CPG Chile | Proyecto IDA300 - UNAB")
 
 
 
