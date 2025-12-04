@@ -126,43 +126,71 @@ else:
             st.dataframe(df_filtered.groupby('Cluster')[['Vol. IA (m³)', 'Precisión (%)', 'Contaminación (%)']].mean())
 
     # ==============================================================================
-    # TAB 3: PREDICCIONES (FORECASTING) (¡NUEVO!)
+    # TAB 3: PREDICCIONES (FORECASTING) - CORREGIDO
     # ==============================================================================
     with tab3:
         st.subheader("🔮 Proyección de Flujo (Próximos 7 días)")
         st.markdown("Modelo de Regresión Lineal para estimar el volumen de carga futura basado en el histórico.")
         
-        # Preparar datos temporales
+        # 1. Preparar datos: Agrupar por día
         daily_vol = df.groupby('Fecha Ingreso')['Vol. IA (m³)'].sum().reset_index()
-        daily_vol['Dia_Num'] = np.arange(len(daily_vol)) # Convertir fecha a número para regresión
         
-        # Entrenar Regresión Lineal
+        # Crear variable numérica para la regresión (Día 1, Día 2, etc.)
+        daily_vol['Dia_Num'] = np.arange(len(daily_vol)) 
+        
+        # 2. Entrenar Modelo
         X = daily_vol[['Dia_Num']]
         y = daily_vol['Vol. IA (m³)']
-        model = LinearRegression()
-        model.fit(X, y)
         
-        # Predecir futuro (7 días)
-        future_days = 7
-        last_day_num = daily_vol['Dia_Num'].max()
-        future_X = np.arange(last_day_num + 1, last_day_num + 1 + future_days).reshape(-1, 1)
-        future_pred = model.predict(future_X)
-        
-        # Crear DataFrame futuro para graficar
-        last_date = daily_vol['Fecha Ingreso'].max()
-        future_dates = [last_date + timedelta(days=i) for i in range(1, future_days + 1)]
-        df_future = pd.DataFrame({'Fecha Ingreso': future_dates, 'Vol. IA (m³)': future_pred, 'Tipo': 'Predicción'})
-        daily_vol['Tipo'] = 'Histórico'
-        
-        # Unir y graficar
-        df_forecast = pd.concat([daily_vol, df_future])
-        
-        fig_forecast = px.line(df_forecast, x='Fecha Ingreso', y='Vol. IA (m³)', color='Tipo', 
-                               markers=True, title="Pronóstico de Volumen de Carga")
-        fig_forecast.add_vline(x=last_date.timestamp() * 1000, line_dash="dash", line_color="green", annotation_text="Hoy")
-        st.plotly_chart(fig_forecast, use_container_width=True)
-        
-        st.info(f"Tendencia calculada: El volumen varía aproximadamente {model.coef_[0]:.2f} m³ por día.")
+        if len(daily_vol) > 1:
+            model = LinearRegression()
+            model.fit(X, y)
+            
+            # 3. Predecir Futuro (7 días)
+            future_days = 7
+            last_day_num = daily_vol['Dia_Num'].max()
+            future_X = np.arange(last_day_num + 1, last_day_num + 1 + future_days).reshape(-1, 1)
+            future_pred = model.predict(future_X)
+            
+            # Generar fechas futuras
+            last_date = daily_vol['Fecha Ingreso'].max()
+            future_dates = [last_date + timedelta(days=i) for i in range(1, future_days + 1)]
+            
+            # Crear DataFrame de Predicción
+            df_future = pd.DataFrame({
+                'Fecha Ingreso': future_dates, 
+                'Vol. IA (m³)': future_pred, 
+                'Tipo': 'Predicción'
+            })
+            daily_vol['Tipo'] = 'Histórico'
+            
+            # Unir datos históricos y futuros
+            df_forecast = pd.concat([daily_vol, df_future])
+            
+            # 4. Graficar
+            fig_forecast = px.line(df_forecast, x='Fecha Ingreso', y='Vol. IA (m³)', color='Tipo', 
+                                   markers=True, title="Pronóstico de Volumen de Carga")
+            
+            # --- CORRECCIÓN CLAVE AQUÍ ---
+            # Convertimos la fecha a texto (YYYY-MM-DD) para que add_vline no falle calculando promedios
+            fecha_hoy_str = last_date.strftime("%Y-%m-%d")
+            
+            fig_forecast.add_vline(
+                x=fecha_hoy_str, 
+                line_dash="dash", 
+                line_color="green", 
+                annotation_text="Hoy"
+            )
+            # -----------------------------
+            
+            st.plotly_chart(fig_forecast, use_container_width=True)
+            
+            # Mostrar dato de tendencia
+            tendencia = model.coef_[0]
+            icono = "📈" if tendencia > 0 else "📉"
+            st.info(f"{icono} Tendencia calculada: El volumen varía **{tendencia:.2f} m³** por día aproximadamente.")
+        else:
+            st.warning("⚠️ No hay suficientes datos históricos para generar una predicción.")
 
     # ==============================================================================
     # TAB 4: CALIDAD DE DATOS (ESTADÍSTICAS)
@@ -181,4 +209,5 @@ else:
         else:
             st.warning("⚠️ Se detectaron valores nulos:")
             st.write(nulls)
+
 
