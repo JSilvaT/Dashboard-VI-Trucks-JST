@@ -159,7 +159,7 @@ else:
         
         fig_forecast = px.line(df_forecast, x='Fecha Ingreso', y='Vol. IA (m³)', color='Tipo', 
                                markers=True, title="Pronóstico de Volumen de Carga")
-        fig_forecast.add_vline(x=last_date, line_dash="dash", line_color="green", annotation_text="Hoy")
+        fig_forecast.add_vline(x=last_date.timestamp() * 1000, line_dash="dash", line_color="green", annotation_text="Hoy")
         st.plotly_chart(fig_forecast, use_container_width=True)
         
         st.info(f"Tendencia calculada: El volumen varía aproximadamente {model.coef_[0]:.2f} m³ por día.")
@@ -181,3 +181,4 @@ else:
         else:
             st.warning("⚠️ Se detectaron valores nulos:")
             st.write(nulls)
+
