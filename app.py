@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import datetime, date
+import plotly.graph_objects as go
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="VI Trucks - Analytics", page_icon="🚛", layout="wide")
+st.set_page_config(page_title="VI Trucks - Analytics Pro", page_icon="🚛", layout="wide")
 
 # --- CARGA DE DATOS ---
 @st.cache_data
@@ -19,104 +19,102 @@ def load_data():
 df = load_data()
 
 # --- HEADER ---
-st.title("🚛 Dashboard Inteligente - CPG Chile")
+st.title("🚛 Dashboard VI Trucks - Análisis & Finanzas")
 st.markdown("---")
 
 if df.empty:
-    st.error("❌ No se encontró el archivo CSV. Sube 'simulacion_piloto_60dias_CPG.csv' al repositorio.")
+    st.error("❌ Error: No se encuentra 'simulacion_piloto_60dias_CPG.csv'")
 else:
-    # --- BARRA LATERAL (FILTROS + DINERO) ---
-    st.sidebar.header("🔍 Filtros de Análisis")
+    # --- SIDEBAR (FILTROS + FINANZAS) ---
+    st.sidebar.header("🔍 Configuración")
     
-    # 1. Filtro de Fechas
+    # Filtros de Fecha
     min_date = df['Fecha Ingreso'].min().date()
     max_date = df['Fecha Ingreso'].max().date()
     date_range = st.sidebar.date_input("Período:", value=(min_date, max_date), min_value=min_date, max_value=max_date)
+    start_date, end_date = date_range if len(date_range) == 2 else (min_date, max_date)
     
-    if len(date_range) == 2:
-        start_date, end_date = date_range
-    else:
-        start_date, end_date = min_date, max_date
-
-    # 2. Filtros Categoricos
-    all_companies = sorted(df['Empresa'].unique())
-    sel_companies = st.sidebar.multiselect("Empresas:", all_companies, default=all_companies)
+    # Filtros Categoría
+    sel_companies = st.sidebar.multiselect("Empresas:", sorted(df['Empresa'].unique()), default=sorted(df['Empresa'].unique()))
+    sel_materials = st.sidebar.multiselect("Materiales:", sorted(df['Material (IA Class)'].unique()), default=sorted(df['Material (IA Class)'].unique()))
     
-    all_materials = sorted(df['Material (IA Class)'].unique())
-    sel_materials = st.sidebar.multiselect("Materiales:", all_materials, default=all_materials)
-
-    # 3. MÓDULO FINANCIERO (NUEVO 💰)
+    # Módulo Financiero
     st.sidebar.markdown("---")
     st.sidebar.header("💰 Parámetros ROI")
-    precio_m3 = st.sidebar.number_input(
-        "Precio por m³ (CLP):", 
-        value=12000, 
-        step=500,
-        help="Valor promedio para calcular ahorro por ajuste de volumen."
-    )
+    precio_m3 = st.sidebar.number_input("Precio m³ (CLP):", value=12000, step=500)
 
-    # --- LÓGICA DE FILTRADO ---
+    # Filtrado
     mask = (
         (df['Fecha Ingreso'].dt.date >= start_date) &
         (df['Fecha Ingreso'].dt.date <= end_date) &
         (df['Empresa'].isin(sel_companies)) &
         (df['Material (IA Class)'].isin(sel_materials))
     )
-    df_filtered = df[mask].copy() # Usamos .copy() para evitar warnings
+    df_filtered = df[mask].copy()
 
-    # --- CÁLCULOS FINANCIEROS ---
-    # Calculamos la diferencia: Lo que declararon - Lo que realmente traían (IA)
-    # Si la diferencia es positiva, significa que declararon más de lo real = Ahorro para CPG
+    # Cálculos Financieros
     df_filtered['Dif_Volumen'] = df_filtered['Vol. Declarado (m³)'] - df_filtered['Vol. IA (m³)']
     df_filtered['Ahorro_CLP'] = df_filtered['Dif_Volumen'].apply(lambda x: x * precio_m3 if x > 0 else 0)
+    df_filtered['Error_Abs'] = abs(df_filtered['Vol. IA (m³)'] - df_filtered['Vol. Declarado (m³)'])
 
-    # --- PANEL DE CONTROL ---
-    if df_filtered.empty:
-        st.warning("⚠️ No hay datos para los filtros seleccionados.")
-    else:
-        st.subheader(f"Resumen del Período: {start_date} al {end_date}")
-        
-        # KPIs (Ahora son 5)
+    # --- KPIs PRINCIPALES ---
+    if not df_filtered.empty:
         k1, k2, k3, k4, k5 = st.columns(5)
-        
-        total_camiones = len(df_filtered)
-        vol_total = df_filtered['Vol. IA (m³)'].sum()
-        precision = df_filtered['Precisión (%)'].mean()
-        rechazos = (len(df_filtered[df_filtered['Contaminación (%)'] > 2.0]) / total_camiones) * 100
-        ahorro_total = df_filtered['Ahorro_CLP'].sum()
-        
-        k1.metric("🚛 Camiones", total_camiones)
-        k2.metric("📦 Volumen (m³)", f"{vol_total:,.0f}")
-        k3.metric("🎯 Precisión IA", f"{precision:.1f}%")
-        k4.metric("⚠️ Tasa Rechazo", f"{rechazos:.1f}%")
-        
-        # EL KPI DE DINERO
-        k5.metric(
-            "💰 Ahorro Estimado", 
-            f"${ahorro_total:,.0f}", 
-            delta="Dinero Recuperado", 
-            delta_color="normal"
-        )
+        k1.metric("🚛 Camiones", len(df_filtered))
+        k2.metric("📦 Volumen (m³)", f"{df_filtered['Vol. IA (m³)'].sum():,.0f}")
+        k3.metric("🎯 Precisión Prom.", f"{df_filtered['Precisión (%)'].mean():.1f}%")
+        k4.metric("⚠️ Rechazos (>2%)", f"{(len(df_filtered[df_filtered['Contaminación (%)'] > 2.0])/len(df_filtered)*100):.1f}%")
+        k5.metric("💰 Ahorro Est.", f"${df_filtered['Ahorro_CLP'].sum():,.0f}", delta="ROI Positivo")
 
-        # --- GRÁFICOS ---
-        c1, c2 = st.columns(2)
-        with c1:
-            # Evolución Volumen
-            daily = df_filtered.groupby('Fecha Ingreso')['Vol. IA (m³)'].sum().reset_index()
-            fig1 = px.bar(daily, x='Fecha Ingreso', y='Vol. IA (m³)', title="📈 Volumen Diario", color_discrete_sequence=['#3182bd'])
+        st.markdown("### 📊 Análisis Técnico Detallado (Los 4 Gráficos)")
+        
+        # --- FILA 1 DE GRÁFICOS ---
+        row1_col1, row1_col2 = st.columns(2)
+        
+        with row1_col1:
+            # 1. HISTOGRAMA COMPARATIVO (Declarado vs IA)
+            # Truco para superponer en Plotly:
+            fig1 = go.Figure()
+            fig1.add_trace(go.Histogram(x=df_filtered['Vol. Declarado (m³)'], name='Declarado', opacity=0.75, marker_color='skyblue'))
+            fig1.add_trace(go.Histogram(x=df_filtered['Vol. IA (m³)'], name='IA (Real)', opacity=0.75, marker_color='orange'))
+            fig1.update_layout(title="1. Distribución de Carga: Declarado vs IA", barmode='overlay')
             st.plotly_chart(fig1, use_container_width=True)
             
-        with c2:
-            # Ranking Financiero por Empresa (Quién infla más el volumen)
-            roi_empresa = df_filtered.groupby('Empresa')['Ahorro_CLP'].sum().reset_index().sort_values('Ahorro_CLP', ascending=True)
-            fig2 = px.bar(roi_empresa, x='Ahorro_CLP', y='Empresa', orientation='h', 
-                          title="💸 Ahorro Generado por Empresa (Auditado)",
-                          color='Ahorro_CLP', color_continuous_scale='Greens')
+        with row1_col2:
+            # 2. BOXPLOT DE PRECISIÓN (Variabilidad por Material)
+            fig2 = px.box(df_filtered, x='Material (IA Class)', y='Precisión (%)', color='Material (IA Class)',
+                          title="2. Variabilidad de Precisión por Material")
+            fig2.add_hline(y=90, line_dash="dash", line_color="red", annotation_text="Meta 90%")
             st.plotly_chart(fig2, use_container_width=True)
 
-        # --- DETALLE DE REGISTROS ---
-        with st.expander("📝 Ver Detalle de Registros y Ahorros"):
-            cols = ['Fecha Ingreso', 'Patente', 'Empresa', 'Material (IA Class)', 
-                    'Vol. Declarado (m³)', 'Vol. IA (m³)', 'Contaminación (%)', 'Ahorro_CLP']
-            st.dataframe(df_filtered[cols].sort_values('Fecha Ingreso', ascending=False), use_container_width=True)
+        # --- FILA 2 DE GRÁFICOS ---
+        row2_col1, row2_col2 = st.columns(2)
+        
+        with row2_col1:
+            # 3. SERIE DE TIEMPO (Tendencia Diaria)
+            daily_stats = df_filtered.groupby('Fecha Ingreso')['Precisión (%)'].mean().reset_index()
+            fig3 = px.line(daily_stats, x='Fecha Ingreso', y='Precisión (%)', markers=True,
+                           title="3. Evolución de la Precisión Diaria", line_shape='spline')
+            fig3.add_hline(y=90, line_dash="dash", line_color="red")
+            st.plotly_chart(fig3, use_container_width=True)
+            
+        with row2_col2:
+            # 4. SCATTER PLOT (Correlación Error vs Volumen)
+            fig4 = px.scatter(df_filtered, x='Vol. Declarado (m³)', y='Error_Abs', color='Material (IA Class)',
+                              title="4. Correlación: Volumen de Carga vs Error (m³)",
+                              size='Contaminación (%)', hover_data=['Empresa'])
+            st.plotly_chart(fig4, use_container_width=True)
 
+        # --- BONUS: GRÁFICO FINANCIERO ---
+        st.markdown("### 💸 Visión Financiera")
+        roi_empresa = df_filtered.groupby('Empresa')['Ahorro_CLP'].sum().reset_index().sort_values('Ahorro_CLP', ascending=True)
+        fig5 = px.bar(roi_empresa, x='Ahorro_CLP', y='Empresa', orientation='h', 
+                      title="Ranking de Ahorro Generado por Empresa", color='Ahorro_CLP', color_continuous_scale='Greens')
+        st.plotly_chart(fig5, use_container_width=True)
+
+        # --- TABLA DETALLE ---
+        with st.expander("📝 Ver Detalle de Registros"):
+            st.dataframe(df_filtered.sort_values('Fecha Ingreso', ascending=False), use_container_width=True)
+            
+    else:
+        st.warning("⚠️ No hay datos para mostrar.")
